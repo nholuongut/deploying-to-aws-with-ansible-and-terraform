@@ -1,0 +1,43 @@
+---
+- hosts: "{{ passed_in_hosts }}"
+  become: yes
+  remote_user: ec2-user
+  become_user: root
+  tasks:
+    - name: Installing docker
+      ansible.builtin.shell: |
+        yum update -y
+        amazon-linux-extras install docker -y
+        service docker start
+        service docker status
+        systemctl enable docker
+        usermod -a -G docker ec2-user
+        systemctl start docker
+
+    - name: Installing jenkins via docker
+      ansible.builtin.shell: |
+        docker pull jenkins/jenkins
+        docker images
+
+    - name: Stop running docker container
+      ansible.builtin.shell: |
+        docker stop jenkins
+        docker ps
+
+    - name: Start docker container
+      ansible.builtin.shell: |
+        docker run --rm -d --name jenkins -p 8080:8080 -v $PWD/jenkins/ jenkins/jenkins
+        docker ps
+
+    - name: Wait until Jenkins is up
+      ansible.builtin.shell: |
+        while true ; do 
+          echo "WAIT FOR: Jenkins is fully up and running"
+          result=$(curl -s localhost:8080 | grep -nE "Authentication required")
+          if [ -n "$result" ] ; then
+            echo "COMPLETE! Jenkins is up and running!"
+            break
+          fi
+          ((c++)) && ((c==20)) && break
+          sleep 3
+        done
